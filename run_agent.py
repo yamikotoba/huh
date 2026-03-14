@@ -58,7 +58,7 @@ def analyze_and_send():
         return
 
     logging.info("Отправка сообщений в Gemini для анализа...")
-    model = genai.GenerativeModel('gemini-2.5-flash-8b', system_instruction=SYSTEM_PROMPT)
+    model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=SYSTEM_PROMPT)
     
     try:
         response = model.generate_content(
