@@ -2,9 +2,28 @@ import json
 import logging
 import time
 import os
+import hashlib
 import vk_api
 
-from config import VK_TOKEN, VK_PEER_IDS, DATA_DIR
+from config import VK_TOKEN, VK_PEER_IDS, STATE_FILE, DATA_DIR
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+def get_text_hash(text):
+    return hashlib.md5(text.strip().lower().encode('utf-8')).hexdigest()
+
+def load_state():
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, "r", encoding="utf-8") as f:
+                return set(json.load(f))
+        except Exception:
+            return set()
+    return set()
+
+def save_state(processed_ids):
+    with open(STATE_FILE, "w", encoding="utf-8") as f:
+        json.dump(list(processed_ids), f)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -21,6 +40,7 @@ def main():
         logging.error(f"VK Authorization failed: {e}")
         return
 
+    processed_ids = load_state()
     week_ago = int(time.time()) - 7 * 24 * 3600
     
     new_messages = []
@@ -43,12 +63,25 @@ def main():
                 for fwd in msg.get("fwd_messages", []):
                     textParts.append(fwd.get("text", ""))
                 text = "\n".join(t for t in textParts if t).strip()
+                
+                text_hash = get_text_hash(text) if text else ""
+                
+                # Пропускаем уже проанализированные
+                if uid in processed_ids or (text_hash and text_hash in processed_ids):
+                    continue
+                    
                 if text:
                     new_messages.append({
                         "uid": uid,
                         "text": text,
                         "date": msg.get("date")
                     })
+                    
+                # Сразу помечаем как "прочитанные", чтобы при следующем запуске 
+                # алгоритм и Gemini их не проверяли снова.
+                processed_ids.add(uid)
+                if text_hash:
+                    processed_ids.add(text_hash)
                     
         except Exception as e:
             logging.error(f"Failed to fetch from {peer_id}: {e}")
@@ -66,6 +99,7 @@ def main():
                 f.write(f"--- ВК СООБЩЕНИЕ (ID: {m['uid']} | ДАТА: {readable_date}) ---\n")
                 f.write(f"{m['text']}\n\n")
                 
+    save_state(processed_ids)
     logging.info(f"Found {len(new_messages)} new messages to analyze. Saved to {output_path}")
     print(f"Готово. Количество новых сообщений для анализа моделью: {len(new_messages)}.")
     print(f"Файл: {output_path}")
