@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+venv/
+env/
+.agents/
+temp_tg_msg.txt
+
+# Keep data structure but ignore its contents except state.json
+data/*
+!data/state.json
